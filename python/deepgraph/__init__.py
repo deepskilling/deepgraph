@@ -32,26 +32,55 @@ For more information, visit: https://github.com/deepskilling/deepgraph
 """
 
 from .deepgraph import (
+    # Core storage
     PyGraphStorage,
     PyTransactionManager,
+    # Indexing
     PyIndexManager,
+    # WAL and recovery
     PyWAL,
+    PyWALRecovery,
+    # Query processing
+    PyCypherParser,
+    PyQueryPlanner,
+    PyQueryExecutor,
+    # MVCC
+    PySnapshot,
+    PyDeadlockDetector,
+    # Metadata
     __version__,
     __author__,
 )
 
 __all__ = [
+    # Core
     "PyGraphStorage",
     "PyTransactionManager",
-    "PyIndexManager",
-    "PyWAL",
-    "__version__",
-    "__author__",
-    # Convenience aliases
     "GraphStorage",
     "TransactionManager",
+    # Indexing
+    "PyIndexManager",
     "IndexManager",
+    # WAL
+    "PyWAL",
+    "PyWALRecovery",
     "WAL",
+    "WALRecovery",
+    # Query
+    "PyCypherParser",
+    "PyQueryPlanner",
+    "PyQueryExecutor",
+    "CypherParser",
+    "QueryPlanner",
+    "QueryExecutor",
+    # MVCC
+    "PySnapshot",
+    "PyDeadlockDetector",
+    "Snapshot",
+    "DeadlockDetector",
+    # Metadata
+    "__version__",
+    "__author__",
 ]
 
 # Convenience aliases
@@ -59,4 +88,10 @@ GraphStorage = PyGraphStorage
 TransactionManager = PyTransactionManager
 IndexManager = PyIndexManager
 WAL = PyWAL
+WALRecovery = PyWALRecovery
+CypherParser = PyCypherParser
+QueryPlanner = PyQueryPlanner
+QueryExecutor = PyQueryExecutor
+Snapshot = PySnapshot
+DeadlockDetector = PyDeadlockDetector
 
