@@ -1,0 +1,116 @@
+// Cypher Grammar for DeepGraph
+// Based on openCypher specification
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
+
+// Identifiers and Literals
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+label = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+property_key = @{ identifier }
+
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+float = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" | "'" ~ (!"'" ~ ANY)* ~ "'" }
+boolean = { "true" | "TRUE" | "false" | "FALSE" }
+null = { "null" | "NULL" }
+
+literal = { boolean | null | float | integer | string }
+
+// Statements
+statement = { query ~ ";"? }
+query = { read_query | write_query }
+
+read_query = { match_clause ~ where_clause? ~ return_clause }
+write_query = { create_clause | delete_clause | set_clause | merge_clause }
+
+// MATCH clause
+match_clause = { ^"MATCH" ~ pattern ~ ("," ~ pattern)* }
+
+// Pattern matching
+pattern = { node_pattern ~ (relationship_pattern ~ node_pattern)* }
+
+node_pattern = {
+    "(" ~ variable? ~ label_expression? ~ properties? ~ ")"
+}
+
+relationship_pattern = {
+    "-" ~ "[" ~ variable? ~ relationship_type? ~ properties? ~ "]" ~ "->" |
+    "-" ~ "[" ~ variable? ~ relationship_type? ~ properties? ~ "]" ~ "-" |
+    "<-" ~ "[" ~ variable? ~ relationship_type? ~ properties? ~ "]" ~ "-"
+}
+
+variable = { identifier }
+label_expression = { ":" ~ label ~ (":" ~ label)* }
+relationship_type = { ":" ~ label }
+
+properties = { "{" ~ property ~ ("," ~ property)* ~ "}" }
+property = { property_key ~ ":" ~ expression }
+
+// WHERE clause
+where_clause = { ^"WHERE" ~ expression }
+
+// RETURN clause
+return_clause = { ^"RETURN" ~ (^"DISTINCT")? ~ return_item ~ ("," ~ return_item)* ~ order_clause? ~ limit_clause? }
+return_item = { expression ~ (^"AS" ~ identifier)? }
+
+order_clause = { ^"ORDER" ~ ^"BY" ~ order_item ~ ("," ~ order_item)* }
+order_item = { expression ~ (^"ASC" | ^"DESC")? }
+
+limit_clause = { ^"LIMIT" ~ integer }
+
+// CREATE clause
+create_clause = { ^"CREATE" ~ pattern ~ ("," ~ pattern)* }
+
+// DELETE clause
+delete_clause = { ^"DELETE" ~ expression ~ ("," ~ expression)* }
+
+// SET clause
+set_clause = { ^"SET" ~ set_item ~ ("," ~ set_item)* }
+set_item = { variable ~ "." ~ property_key ~ "=" ~ expression }
+
+// MERGE clause
+merge_clause = { ^"MERGE" ~ pattern }
+
+// Expressions
+expression = { or_expression }
+
+or_expression = { and_expression ~ (^"OR" ~ and_expression)* }
+and_expression = { not_expression ~ (^"AND" ~ not_expression)* }
+not_expression = { ^"NOT"? ~ comparison_expression }
+
+comparison_expression = {
+    additive_expression ~ (comparison_operator ~ additive_expression)?
+}
+
+comparison_operator = {
+    "=" | "!=" | "<>" | "<" | "<=" | ">" | ">="
+}
+
+additive_expression = {
+    multiplicative_expression ~ (("+"|"-") ~ multiplicative_expression)*
+}
+
+multiplicative_expression = {
+    unary_expression ~ (("*"|"/"|"%") ~ unary_expression)*
+}
+
+unary_expression = { ("-"|"+")? ~ atom }
+
+atom = {
+    literal |
+    parameter |
+    function_call |
+    property_lookup |
+    variable |
+    "(" ~ expression ~ ")"
+}
+
+property_lookup = { variable ~ "." ~ property_key }
+parameter = { "$" ~ identifier }
+
+function_call = {
+    identifier ~ "(" ~ (^"DISTINCT")? ~ expression ~ ("," ~ expression)* ~ ")" |
+    identifier ~ "(" ~ ")"
+}
+
