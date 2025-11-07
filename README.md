@@ -212,7 +212,6 @@ let wal = WAL::new(config).unwrap();
 
 - **[Getting Started Guide](doc/GETTING_STARTED.md)** - Comprehensive tutorial for new users
 - **[API Documentation](doc/API.md)** - Complete API reference and examples
-- **[Phase 2 Complete](doc/PHASE2_COMPLETE.md)** - Detailed feature breakdown
 - **[Architecture Overview](doc/DETAILED_REVIEW.md)** - System design and internals
 - **[Contributing Guidelines](doc/CONTRIBUTING.md)** - How to contribute to the project
 
