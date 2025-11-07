@@ -52,6 +52,9 @@ pest_derive = "2.7"
 # Time utilities
 chrono = "0.4"
 
+# Python bindings
+pyo3 = { version = "0.21", features = ["extension-module", "abi3-py38"], optional = true }
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.4"
@@ -64,6 +67,11 @@ harness = false
 [lib]
 name = "deepgraph"
 path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+python = ["pyo3"]
 
 [[bin]]
 name = "deepgraph-cli"

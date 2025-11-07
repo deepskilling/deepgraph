@@ -25,6 +25,10 @@ pub mod query;
 pub mod wal;
 pub mod mvcc;
 
+// Python bindings (optional)
+#[cfg(feature = "python")]
+pub mod python;
+
 pub use error::{DeepGraphError, Result};
 pub use graph::{Node, Edge, Property, PropertyValue, NodeId, EdgeId};
 pub use storage::{GraphStorage, StorageBackend};

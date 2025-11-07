@@ -20,6 +20,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/deepskilling/deepgraph?style=for-the-badge&logo=github)](https://github.com/deepskilling/deepgraph/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org)
+[![Python](https://img.shields.io/badge/python-3.8+-blue?style=for-the-badge&logo=python)](https://www.python.org)
 [![Tests](https://img.shields.io/badge/tests-97%20passing-brightgreen?style=for-the-badge)]()
 [![Performance](https://img.shields.io/badge/performance-1000x%20faster-red?style=for-the-badge)]()
 
@@ -43,6 +44,7 @@
 - 🎯 **Query optimization** with cost-based planner
 - 🛡️ **Deadlock detection** and prevention
 - 💾 **Crash recovery** with write-ahead logging
+- 🐍 **Python bindings** with PyO3 for zero-cost abstractions
 - 🧪 **97 tests** passing at 100% success rate
 
 ## Performance
@@ -79,6 +81,7 @@ DeepGraph delivers exceptional performance through smart indexing and MVCC:
 DeepGraph combines the best of modern database technologies:
 
 - **🦀 Built in Rust** - Memory-safe, blazingly fast, and concurrent
+- **🐍 Python Support** - Zero-cost abstractions with PyO3 bindings
 - **🎨 Developer-Friendly** - Clean API with comprehensive documentation
 - **🏗️ Production-Ready** - Battle-tested with 97 passing tests
 - **⚡ Zero Compromise** - ACID guarantees without sacrificing performance
@@ -106,8 +109,9 @@ DeepGraph combines the best of modern database technologies:
 - [x] **MVCC** - Snapshot isolation for concurrent transactions
 - [x] **Deadlock Detection** - Automatic prevention with wait-for graphs
 - [x] **Transaction Manager** - Full ACID guarantees
+- [x] **Python Bindings** - PyO3-based bindings with zero-cost abstractions
 
-**Status**: 97 tests passing, 5.8k lines of code, production-ready
+**Status**: 97 tests passing, 5.8k lines of code, Python support, production-ready
 
 ### Phase 3: Advanced Features (Future)
 - [ ] Enhanced CLI with REPL
@@ -121,12 +125,14 @@ DeepGraph combines the best of modern database technologies:
 
 ## 📦 Installation
 
-### Prerequisites
+### Rust
+
+#### Prerequisites
 
 - **Rust 1.75+** - [Install Rust](https://rustup.rs/)
 - **Cargo** - Comes with Rust
 
-### From Source
+#### From Source
 
 ```bash
 # Clone the repository
@@ -138,6 +144,41 @@ cargo build --release
 
 # Run tests to verify installation
 cargo test --lib
+```
+
+### Python
+
+#### Prerequisites
+
+- **Python 3.8+** - [Download Python](https://www.python.org/downloads/)
+- **Rust 1.75+** - Required for building
+- **Maturin** - Build tool for Rust-Python bindings
+
+#### Installation
+
+```bash
+# Install Maturin
+pip install maturin
+
+# Clone the repository (if not already done)
+git clone https://github.com/deepskilling/deepgraph.git
+cd deepgraph
+
+# Build and install the Python package
+maturin develop --features python
+
+# Or build a wheel for distribution
+maturin build --release --features python
+```
+
+#### Quick Test
+
+```python
+import deepgraph
+
+storage = deepgraph.GraphStorage()
+node_id = storage.add_node(["Person"], {"name": "Alice"})
+print(f"Created node: {node_id}")
 ```
 
 ## 🚀 Quick Start
@@ -172,7 +213,7 @@ cargo bench
 
 ## 💡 Examples
 
-### Basic Usage
+### Rust Usage
 
 ```rust
 use deepgraph::{GraphStorage, Node, Edge};
@@ -207,6 +248,67 @@ txn_manager.commit_transaction(txn_id).unwrap();
 let config = WALConfig::new().with_dir("./data/wal");
 let wal = WAL::new(config).unwrap();
 ```
+
+### Python Usage
+
+```python
+import deepgraph
+
+# Create a graph storage
+storage = deepgraph.GraphStorage()
+
+# Add nodes with properties
+alice_id = storage.add_node(
+    labels=["Person"],
+    properties={"name": "Alice", "age": 30}
+)
+
+bob_id = storage.add_node(
+    labels=["Person"],
+    properties={"name": "Bob", "age": 25}
+)
+
+# Add edges
+friendship_id = storage.add_edge(
+    from_id=alice_id,
+    to_id=bob_id,
+    label="KNOWS",
+    properties={"since": 2020}
+)
+
+# Query the graph
+alice = storage.get_node(alice_id)
+print(f"Alice: {alice}")
+
+# Find nodes by label
+people = storage.find_nodes_by_label("Person")
+print(f"Found {len(people)} people")
+
+# Use transactions
+txn_manager = deepgraph.TransactionManager()
+txn_id = txn_manager.begin_transaction()
+
+# Perform operations...
+charlie_id = storage.add_node(
+    labels=["Person"],
+    properties={"name": "Charlie", "age": 28}
+)
+
+# Commit transaction
+txn_manager.commit_transaction(txn_id)
+
+# Graph statistics
+print(f"Total nodes: {storage.node_count()}")
+print(f"Total edges: {storage.edge_count()}")
+```
+
+### More Examples
+
+- **Rust Examples**: See [benches/graph_ops.rs](benches/graph_ops.rs)
+- **Python Examples**: 
+  - [Basic Usage](examples/python/basic_usage.py)
+  - [Social Network](examples/python/social_network.py)
+  - [More examples](examples/python/)
 
 ## 📚 Documentation
 

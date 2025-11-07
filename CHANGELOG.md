@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Python Bindings**: Full Python support via PyO3
+  - PyGraphStorage class for graph operations
+  - PyTransactionManager for ACID transactions
+  - Zero-cost abstractions over Rust implementation
+  - Python 3.8+ compatibility
+  - Comprehensive examples (basic_usage.py, social_network.py)
+
 ### Planned
 - Enhanced CLI with REPL interface
 - Distributed graph storage
