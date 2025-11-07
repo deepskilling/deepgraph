@@ -244,7 +244,7 @@ Check out our [Phase 3 Plans](#phase-3-advanced-features-future) for upcoming fe
 
 ## 📝 Changelog
 
-See [doc/STATUS.md](doc/STATUS.md) for project evolution and milestones.
+See [CHANGELOG.md](CHANGELOG.md) for version history and project milestones.
 
 ## 💬 Community & Support
 
