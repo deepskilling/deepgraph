@@ -12,6 +12,8 @@ use uuid::Uuid;
 use crate::graph::{Node, Edge, PropertyValue, NodeId, EdgeId};
 use crate::storage::GraphStorage;
 use crate::mvcc::{TransactionManager, txn_manager::TransactionId};
+use crate::index::{IndexManager, IndexConfig, IndexType};
+use crate::wal::{WAL, WALConfig};
 
 /// Convert Rust PropertyValue to Python object
 fn property_value_to_py(py: Python, value: &PropertyValue) -> PyResult<PyObject> {
@@ -242,6 +244,277 @@ impl PyGraphStorage {
             .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
         Ok(storage.edge_count())
     }
+
+    /// Update a node's properties
+    /// 
+    /// Args:
+    ///     node_id: Node ID as a string
+    ///     properties: Dictionary of new properties
+    fn update_node(&self, node_id: String, properties: HashMap<String, PyObject>) -> PyResult<()> {
+        Python::with_gil(|py| {
+            let uuid = Uuid::parse_str(&node_id)
+                .map_err(|e| PyValueError::new_err(format!("Invalid node_id: {}", e)))?;
+            let nid = NodeId::from_uuid(uuid);
+
+            let storage = self.storage.write()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            // Get existing node
+            let mut node = storage.get_node(nid)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get node: {}", e)))?;
+            
+            // Update properties
+            for (key, value) in properties {
+                let prop_value = py_to_property_value(value.bind(py))?;
+                node.set_property(key, prop_value);
+            }
+            
+            storage.update_node(node)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to update node: {}", e)))
+        })
+    }
+
+    /// Delete a node from the graph
+    /// 
+    /// Args:
+    ///     node_id: Node ID as a string
+    fn delete_node(&self, node_id: String) -> PyResult<()> {
+        let uuid = Uuid::parse_str(&node_id)
+            .map_err(|e| PyValueError::new_err(format!("Invalid node_id: {}", e)))?;
+        let nid = NodeId::from_uuid(uuid);
+
+        let storage = self.storage.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        storage.delete_node(nid)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to delete node: {}", e)))
+    }
+
+    /// Update an edge's properties
+    /// 
+    /// Args:
+    ///     edge_id: Edge ID as a string
+    ///     properties: Dictionary of new properties
+    fn update_edge(&self, edge_id: String, properties: HashMap<String, PyObject>) -> PyResult<()> {
+        Python::with_gil(|py| {
+            let uuid = Uuid::parse_str(&edge_id)
+                .map_err(|e| PyValueError::new_err(format!("Invalid edge_id: {}", e)))?;
+            let eid = EdgeId::from_uuid(uuid);
+
+            let storage = self.storage.write()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            // Get existing edge
+            let mut edge = storage.get_edge(eid)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get edge: {}", e)))?;
+            
+            // Update properties
+            for (key, value) in properties {
+                let prop_value = py_to_property_value(value.bind(py))?;
+                edge.set_property(key, prop_value);
+            }
+            
+            storage.update_edge(edge)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to update edge: {}", e)))
+        })
+    }
+
+    /// Delete an edge from the graph
+    /// 
+    /// Args:
+    ///     edge_id: Edge ID as a string
+    fn delete_edge(&self, edge_id: String) -> PyResult<()> {
+        let uuid = Uuid::parse_str(&edge_id)
+            .map_err(|e| PyValueError::new_err(format!("Invalid edge_id: {}", e)))?;
+        let eid = EdgeId::from_uuid(uuid);
+
+        let storage = self.storage.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        storage.delete_edge(eid)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to delete edge: {}", e)))
+    }
+
+    /// Get all outgoing edges from a node
+    /// 
+    /// Args:
+    ///     node_id: Source node ID
+    /// 
+    /// Returns:
+    ///     List of edge dictionaries
+    fn get_outgoing_edges(&self, node_id: String) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            let uuid = Uuid::parse_str(&node_id)
+                .map_err(|e| PyValueError::new_err(format!("Invalid node_id: {}", e)))?;
+            let nid = NodeId::from_uuid(uuid);
+
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let edges = storage.get_outgoing_edges(nid)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get outgoing edges: {}", e)))?;
+            
+            let mut result = Vec::new();
+            for edge in edges {
+                let dict = pyo3::types::PyDict::new_bound(py);
+                dict.set_item("id", edge.id().to_string())?;
+                dict.set_item("from", edge.from().to_string())?;
+                dict.set_item("to", edge.to().to_string())?;
+                dict.set_item("label", edge.relationship_type())?;
+                
+                let props = pyo3::types::PyDict::new_bound(py);
+                for (key, value) in edge.properties() {
+                    props.set_item(key, property_value_to_py(py, value)?)?;
+                }
+                dict.set_item("properties", props)?;
+                result.push(dict.to_object(py));
+            }
+            
+            Ok(result)
+        })
+    }
+
+    /// Get all incoming edges to a node
+    /// 
+    /// Args:
+    ///     node_id: Target node ID
+    /// 
+    /// Returns:
+    ///     List of edge dictionaries
+    fn get_incoming_edges(&self, node_id: String) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            let uuid = Uuid::parse_str(&node_id)
+                .map_err(|e| PyValueError::new_err(format!("Invalid node_id: {}", e)))?;
+            let nid = NodeId::from_uuid(uuid);
+
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let edges = storage.get_incoming_edges(nid)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get incoming edges: {}", e)))?;
+            
+            let mut result = Vec::new();
+            for edge in edges {
+                let dict = pyo3::types::PyDict::new_bound(py);
+                dict.set_item("id", edge.id().to_string())?;
+                dict.set_item("from", edge.from().to_string())?;
+                dict.set_item("to", edge.to().to_string())?;
+                dict.set_item("label", edge.relationship_type())?;
+                
+                let props = pyo3::types::PyDict::new_bound(py);
+                for (key, value) in edge.properties() {
+                    props.set_item(key, property_value_to_py(py, value)?)?;
+                }
+                dict.set_item("properties", props)?;
+                result.push(dict.to_object(py));
+            }
+            
+            Ok(result)
+        })
+    }
+
+    /// Find nodes by property value
+    /// 
+    /// Args:
+    ///     key: Property key
+    ///     value: Property value to match
+    /// 
+    /// Returns:
+    ///     List of node IDs
+    fn find_nodes_by_property(&self, key: String, value: PyObject) -> PyResult<Vec<String>> {
+        Python::with_gil(|py| {
+            let prop_value = py_to_property_value(value.bind(py))?;
+            
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let nodes = storage.get_nodes_by_property(&key, &prop_value);
+            Ok(nodes.iter().map(|node| node.id().to_string()).collect())
+        })
+    }
+
+    /// Find edges by relationship type
+    /// 
+    /// Args:
+    ///     relationship_type: Type of relationship to find
+    /// 
+    /// Returns:
+    ///     List of edge IDs
+    fn find_edges_by_type(&self, relationship_type: String) -> PyResult<Vec<String>> {
+        let storage = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let edges = storage.get_edges_by_type(&relationship_type);
+        Ok(edges.iter().map(|edge| edge.id().to_string()).collect())
+    }
+
+    /// Get all nodes in the graph
+    /// 
+    /// Returns:
+    ///     List of node dictionaries
+    fn get_all_nodes(&self) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let nodes = storage.get_all_nodes();
+            let mut result = Vec::new();
+            
+            for node in nodes {
+                let dict = pyo3::types::PyDict::new_bound(py);
+                dict.set_item("id", node.id().to_string())?;
+                dict.set_item("labels", node.labels().to_vec())?;
+                
+                let props = pyo3::types::PyDict::new_bound(py);
+                for (key, value) in node.properties() {
+                    props.set_item(key, property_value_to_py(py, value)?)?;
+                }
+                dict.set_item("properties", props)?;
+                result.push(dict.to_object(py));
+            }
+            
+            Ok(result)
+        })
+    }
+
+    /// Get all edges in the graph
+    /// 
+    /// Returns:
+    ///     List of edge dictionaries
+    fn get_all_edges(&self) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let edges = storage.get_all_edges();
+            let mut result = Vec::new();
+            
+            for edge in edges {
+                let dict = pyo3::types::PyDict::new_bound(py);
+                dict.set_item("id", edge.id().to_string())?;
+                dict.set_item("from", edge.from().to_string())?;
+                dict.set_item("to", edge.to().to_string())?;
+                dict.set_item("label", edge.relationship_type())?;
+                
+                let props = pyo3::types::PyDict::new_bound(py);
+                for (key, value) in edge.properties() {
+                    props.set_item(key, property_value_to_py(py, value)?)?;
+                }
+                dict.set_item("properties", props)?;
+                result.push(dict.to_object(py));
+            }
+            
+            Ok(result)
+        })
+    }
+
+    /// Clear all data from the graph
+    fn clear(&self) -> PyResult<()> {
+        let storage = self.storage.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        storage.clear();
+        Ok(())
+    }
 }
 
 /// Python wrapper for TransactionManager
@@ -300,11 +573,117 @@ impl PyTransactionManager {
     }
 }
 
+/// Python wrapper for IndexManager
+#[pyclass]
+pub struct PyIndexManager {
+    manager: Arc<RwLock<IndexManager>>,
+}
+
+#[pymethods]
+impl PyIndexManager {
+    /// Create a new index manager
+    #[new]
+    fn new() -> Self {
+        PyIndexManager {
+            manager: Arc::new(RwLock::new(IndexManager::new())),
+        }
+    }
+
+    /// Create a hash index for fast label lookups
+    /// 
+    /// Args:
+    ///     index_name: Name for the index
+    ///     label: Label to index
+    fn create_hash_index(&self, index_name: String, label: String) -> PyResult<()> {
+        let manager = self.manager.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let config = IndexConfig {
+            name: index_name,
+            index_type: IndexType::Hash,
+            is_label_index: true,
+            property_key: None,
+        };
+        
+        manager.create_index(config)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create hash index: {}", e)))
+    }
+
+    /// Create a B-tree index for range queries
+    /// 
+    /// Args:
+    ///     index_name: Name for the index
+    ///     property_key: Property key to index
+    fn create_btree_index(&self, index_name: String, property_key: String) -> PyResult<()> {
+        let manager = self.manager.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let config = IndexConfig {
+            name: index_name,
+            index_type: IndexType::BTree,
+            is_label_index: false,
+            property_key: Some(property_key),
+        };
+        
+        manager.create_index(config)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create B-tree index: {}", e)))
+    }
+
+    /// Drop an index
+    /// 
+    /// Args:
+    ///     index_name: Name of index to drop
+    fn drop_index(&self, index_name: String) -> PyResult<()> {
+        let manager = self.manager.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        manager.drop_index(&index_name)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to drop index: {}", e)))
+    }
+}
+
+/// Python wrapper for WAL (Write-Ahead Log)
+#[pyclass]
+pub struct PyWAL {
+    wal: Arc<RwLock<WAL>>,
+}
+
+#[pymethods]
+impl PyWAL {
+    /// Create a new write-ahead log
+    /// 
+    /// Args:
+    ///     wal_dir: Directory path for WAL storage
+    #[new]
+    fn new(wal_dir: String) -> PyResult<Self> {
+        let config = WALConfig::new().with_dir(&wal_dir);
+        let wal = WAL::new(config)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create WAL: {}", e)))?;
+        
+        Ok(PyWAL {
+            wal: Arc::new(RwLock::new(wal)),
+        })
+    }
+
+    /// Flush WAL to disk
+    fn flush(&self) -> PyResult<()> {
+        let wal = self.wal.write()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        wal.flush()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to flush WAL: {}", e)))
+    }
+
+}
+
+
 /// DeepGraph Python module
 #[pymodule]
 fn deepgraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyGraphStorage>()?;
     m.add_class::<PyTransactionManager>()?;
+    m.add_class::<PyIndexManager>()?;
+    m.add_class::<PyWAL>()?;
     
     // Module metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
