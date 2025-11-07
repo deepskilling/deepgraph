@@ -2,9 +2,16 @@
 name = "deepgraph"
 version = "0.1.0"
 edition = "2021"
-authors = ["DeepGraph Team"]
-description = "A high-performance graph database written in Rust"
+authors = ["DeepSkilling <learning@deepskilling.com>"]
+description = "High-performance graph database with ACID guarantees, MVCC, and intelligent query optimization"
 license = "MIT"
+repository = "https://github.com/deepskilling/deepgraph"
+homepage = "https://github.com/deepskilling/deepgraph"
+documentation = "https://github.com/deepskilling/deepgraph/tree/master/doc"
+readme = "README.md"
+keywords = ["graph", "database", "mvcc", "acid", "query-engine"]
+categories = ["database-implementations", "data-structures"]
+rust-version = "1.75"
 
 [dependencies]
 # Serialization
