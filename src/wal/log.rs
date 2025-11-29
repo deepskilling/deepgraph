@@ -5,6 +5,7 @@
 use crate::error::{DeepGraphError, Result};
 use crate::graph::{Edge, EdgeId, Node, NodeId};
 use crate::wal::WALConfig;
+use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -80,6 +81,12 @@ pub enum WALOperation {
 impl WAL {
     /// Create a new WAL
     pub fn new(config: WALConfig) -> Result<Self> {
+        info!("Initializing WAL at directory: {}", config.wal_dir);
+        info!("WAL configuration: segment_size={}MB, sync_on_write={}, checkpoint_threshold={}", 
+              config.segment_size / (1024 * 1024), 
+              config.sync_on_write,
+              config.checkpoint_threshold);
+        
         // Create WAL directory
         std::fs::create_dir_all(&config.wal_dir)?;
         
@@ -94,6 +101,7 @@ impl WAL {
         // Open first segment
         wal.rotate_segment()?;
         
+        info!("WAL initialized successfully");
         Ok(wal)
     }
     
@@ -101,6 +109,8 @@ impl WAL {
     pub fn append(&self, txn_id: u64, operation: WALOperation) -> Result<LSN> {
         // Get next LSN
         let lsn = self.current_lsn.fetch_add(1, Ordering::SeqCst);
+        
+        debug!("WAL append: LSN={}, txn_id={}, op={:?}", lsn, txn_id, operation);
         
         // Create entry
         let entry = WALEntry {
@@ -117,6 +127,8 @@ impl WAL {
         let serialized = bincode::serialize(&entry)
             .map_err(|e| DeepGraphError::StorageError(format!("WAL serialize error: {}", e)))?;
         
+        trace!("WAL entry serialized: {} bytes", serialized.len());
+        
         // Write length prefix + data
         let mut segment = self.current_segment.write();
         if let Some(ref mut writer) = *segment {
@@ -127,6 +139,7 @@ impl WAL {
             // Sync if configured
             if self.config.sync_on_write {
                 writer.flush()?;
+                trace!("WAL entry synced to disk at LSN {}", lsn);
             }
         }
         
@@ -147,6 +160,8 @@ impl WAL {
         let segment_num = self.segment_number.fetch_add(1, Ordering::SeqCst);
         let segment_path = self.segment_path(segment_num);
         
+        info!("Rotating WAL to new segment: {:?} (segment #{})", segment_path, segment_num);
+        
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -159,6 +174,7 @@ impl WAL {
         
         self.entries_in_segment.store(0, Ordering::SeqCst);
         
+        info!("WAL segment rotation complete");
         Ok(())
     }
     
@@ -169,10 +185,12 @@ impl WAL {
     
     /// Force sync to disk
     pub fn flush(&self) -> Result<()> {
+        debug!("Flushing WAL to disk");
         let mut segment = self.current_segment.write();
         if let Some(ref mut writer) = *segment {
             writer.flush()?;
         }
+        trace!("WAL flushed successfully");
         Ok(())
     }
     
@@ -183,7 +201,10 @@ impl WAL {
     
     /// Write checkpoint marker
     pub fn checkpoint(&self) -> Result<LSN> {
-        self.append(0, WALOperation::Checkpoint)
+        info!("Writing WAL checkpoint");
+        let lsn = self.append(0, WALOperation::Checkpoint)?;
+        info!("WAL checkpoint written at LSN {}", lsn);
+        Ok(lsn)
     }
 }
 

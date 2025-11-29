@@ -6,6 +6,7 @@
 use crate::error::{DeepGraphError, Result};
 use crate::graph::{Edge, EdgeId, Node, NodeId, PropertyValue};
 use dashmap::DashMap;
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,6 +33,7 @@ pub struct MemoryStorage {
 impl MemoryStorage {
     /// Create a new empty graph storage
     pub fn new() -> Self {
+        info!("Creating new in-memory graph storage");
         Self {
             nodes: Arc::new(DashMap::new()),
             edges: Arc::new(DashMap::new()),
@@ -53,35 +55,53 @@ impl MemoryStorage {
     /// Add a node to the storage
     pub fn add_node(&self, node: Node) -> Result<NodeId> {
         let id = node.id();
+        debug!("Adding node {} with labels {:?}", id, node.labels());
         self.nodes.insert(id, node);
+        info!("Node {} added successfully", id);
         Ok(id)
     }
 
     /// Get a node by ID
     pub fn get_node(&self, id: NodeId) -> Result<Node> {
+        debug!("Retrieving node {}", id);
         self.nodes
             .get(&id)
             .map(|entry| entry.value().clone())
-            .ok_or_else(|| DeepGraphError::NodeNotFound(id.to_string()))
+            .ok_or_else(|| {
+                warn!("Node {} not found", id);
+                DeepGraphError::NodeNotFound(id.to_string())
+            })
     }
 
     /// Update a node
     pub fn update_node(&self, node: Node) -> Result<()> {
         let id = node.id();
+        debug!("Updating node {}", id);
         if self.nodes.contains_key(&id) {
             self.nodes.insert(id, node);
+            info!("Node {} updated successfully", id);
             Ok(())
         } else {
+            warn!("Cannot update node {}: not found", id);
             Err(DeepGraphError::NodeNotFound(id.to_string()))
         }
     }
 
     /// Delete a node and all connected edges
     pub fn delete_node(&self, id: NodeId) -> Result<()> {
+        info!("Deleting node {} and all connected edges", id);
+        
+        // Count edges for logging
+        let outgoing_count = self.outgoing_edges.get(&id).map(|e| e.len()).unwrap_or(0);
+        let incoming_count = self.incoming_edges.get(&id).map(|e| e.len()).unwrap_or(0);
+        
         // Remove the node
         self.nodes
             .remove(&id)
-            .ok_or_else(|| DeepGraphError::NodeNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                warn!("Cannot delete node {}: not found", id);
+                DeepGraphError::NodeNotFound(id.to_string())
+            })?;
 
         // Remove all outgoing edges
         if let Some((_, edge_ids)) = self.outgoing_edges.remove(&id) {
@@ -97,6 +117,8 @@ impl MemoryStorage {
             }
         }
 
+        info!("Node {} deleted successfully ({} outgoing, {} incoming edges removed)", 
+              id, outgoing_count, incoming_count);
         Ok(())
     }
 
@@ -144,12 +166,16 @@ impl MemoryStorage {
         let id = edge.id();
         let from = edge.from();
         let to = edge.to();
+        
+        debug!("Adding edge {} from {} to {} (type: {})", id, from, to, edge.relationship_type());
 
         // Verify that both nodes exist
         if !self.nodes.contains_key(&from) {
+            warn!("Cannot add edge: source node {} not found", from);
             return Err(DeepGraphError::NodeNotFound(from.to_string()));
         }
         if !self.nodes.contains_key(&to) {
+            warn!("Cannot add edge: target node {} not found", to);
             return Err(DeepGraphError::NodeNotFound(to.to_string()));
         }
 
@@ -168,6 +194,7 @@ impl MemoryStorage {
             .or_insert_with(Vec::new)
             .push(id);
 
+        info!("Edge {} added successfully", id);
         Ok(id)
     }
 
@@ -192,10 +219,15 @@ impl MemoryStorage {
 
     /// Delete an edge
     pub fn delete_edge(&self, id: EdgeId) -> Result<()> {
+        info!("Deleting edge {}", id);
+        
         let edge = self
             .edges
             .remove(&id)
-            .ok_or_else(|| DeepGraphError::EdgeNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                warn!("Cannot delete edge {}: not found", id);
+                DeepGraphError::EdgeNotFound(id.to_string())
+            })?;
 
         let from = edge.1.from();
         let to = edge.1.to();
@@ -210,6 +242,7 @@ impl MemoryStorage {
             edges.retain(|&eid| eid != id);
         }
 
+        info!("Edge {} deleted successfully", id);
         Ok(())
     }
 

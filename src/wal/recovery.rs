@@ -5,6 +5,7 @@
 use crate::error::{DeepGraphError, Result};
 use crate::storage::StorageBackend;
 use crate::wal::{WALConfig, WALEntry, WALOperation};
+use log::{info, debug, warn};
 use std::collections::HashSet;
 use std::fs::{File, read_dir};
 use std::io::{BufReader, Read};
@@ -23,17 +24,23 @@ impl WALRecovery {
     
     /// Recover database from WAL
     pub fn recover<S: StorageBackend>(&self, storage: &S) -> Result<u64> {
+        info!("Starting WAL recovery from directory: {}", self.config.wal_dir);
+        
         // Find all WAL segments
         let segments = self.find_segments()?;
         
         if segments.is_empty() {
+            info!("No WAL segments found, recovery complete");
             return Ok(0);
         }
+        
+        info!("Found {} WAL segments to recover", segments.len());
         
         // Track committed transactions
         let mut committed_txns = HashSet::new();
         
         // First pass: identify committed transactions
+        debug!("First pass: identifying committed transactions");
         for segment_path in &segments {
             let entries = self.read_segment(segment_path)?;
             for entry in entries {
@@ -43,7 +50,10 @@ impl WALRecovery {
             }
         }
         
+        info!("Found {} committed transactions", committed_txns.len());
+        
         // Second pass: replay committed transactions
+        debug!("Second pass: replaying committed transactions");
         let mut recovered = 0;
         for segment_path in &segments {
             let entries = self.read_segment(segment_path)?;
@@ -56,6 +66,7 @@ impl WALRecovery {
             }
         }
         
+        info!("WAL recovery complete: {} operations replayed", recovered);
         Ok(recovered)
     }
     
@@ -64,15 +75,18 @@ impl WALRecovery {
         let wal_path = Path::new(&self.config.wal_dir);
         
         if !wal_path.exists() {
+            warn!("WAL directory does not exist: {}", self.config.wal_dir);
             return Ok(vec![]);
         }
         
+        debug!("Scanning for WAL segments in: {:?}", wal_path);
         let mut segments = Vec::new();
         for entry in read_dir(wal_path)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("log") {
                 if let Some(path_str) = path.to_str() {
+                    debug!("Found WAL segment: {}", path_str);
                     segments.push(path_str.to_string());
                 }
             }
