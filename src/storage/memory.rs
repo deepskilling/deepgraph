@@ -6,6 +6,7 @@
 use crate::error::{DeepGraphError, Result};
 use crate::graph::{Edge, EdgeId, Node, NodeId, PropertyValue};
 use dashmap::DashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// In-memory graph storage engine
@@ -121,6 +122,21 @@ impl MemoryStorage {
             })
             .map(|entry| entry.value().clone())
             .collect()
+    }
+
+    /// Add an edge with just IDs and relationship type (helper method)
+    pub fn add_edge_simple(&self, from: NodeId, to: NodeId, relationship_type: String) -> Result<EdgeId> {
+        let edge = Edge::new(from, to, relationship_type);
+        self.add_edge(edge)
+    }
+    
+    /// Add an edge with properties (helper method)
+    pub fn add_edge_with_properties(&self, from: NodeId, to: NodeId, relationship_type: String, properties: HashMap<String, PropertyValue>) -> Result<EdgeId> {
+        let mut edge = Edge::new(from, to, relationship_type);
+        for (key, value) in properties {
+            edge.set_property(key, value);
+        }
+        self.add_edge(edge)
     }
 
     /// Add an edge to the storage

@@ -3,6 +3,7 @@
 use crate::error::Result;
 use crate::graph::NodeId;
 use crate::storage::GraphStorage;
+use log::info;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Result of BFS traversal
@@ -54,6 +55,8 @@ pub fn bfs(
     start_node: NodeId,
     max_depth: Option<usize>,
 ) -> Result<BFSResult> {
+    info!("Starting BFS from node {} with max_depth {:?}", start_node, max_depth);
+    
     // Verify start node exists
     storage.get_node(start_node)?;
 
@@ -94,11 +97,14 @@ pub fn bfs(
         }
     }
 
-    Ok(BFSResult {
+    let result = BFSResult {
         visited,
         distances,
         parents,
-    })
+    };
+    
+    info!("BFS completed: visited {} nodes", result.visited.len());
+    Ok(result)
 }
 
 /// Depth-First Search (DFS) traversal
@@ -121,6 +127,8 @@ pub fn bfs(
 /// println!("Visited {} nodes", result.visited.len());
 /// ```
 pub fn dfs(storage: &GraphStorage, start_node: NodeId) -> Result<DFSResult> {
+    info!("Starting DFS from node {}", start_node);
+    
     // Verify start node exists
     storage.get_node(start_node)?;
 
@@ -184,12 +192,15 @@ pub fn dfs(storage: &GraphStorage, start_node: NodeId) -> Result<DFSResult> {
         &mut time,
     )?;
 
-    Ok(DFSResult {
+    let result = DFSResult {
         visited,
         discovery_time,
         finish_time,
         parents,
-    })
+    };
+    
+    info!("DFS completed: visited {} nodes", result.visited.len());
+    Ok(result)
 }
 
 #[cfg(test)]

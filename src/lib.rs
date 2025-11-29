@@ -17,6 +17,7 @@ pub mod storage;
 pub mod parser;
 pub mod transaction;
 pub mod error;
+pub mod config;
 
 // Phase 2 modules
 pub mod persistence;
@@ -36,4 +37,5 @@ pub use error::{DeepGraphError, Result};
 pub use graph::{Node, Edge, Property, PropertyValue, NodeId, EdgeId};
 pub use storage::{GraphStorage, StorageBackend};
 pub use transaction::Transaction;
+pub use config::DeepGraphConfig;
 

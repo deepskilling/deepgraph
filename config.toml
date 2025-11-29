@@ -1,0 +1,65 @@
+# DeepGraph Configuration File
+# This is the main configuration file for DeepGraph database
+
+[storage]
+# Base data directory for all persistent files
+data_dir = "./data"
+
+# Enable in-memory caching
+enable_cache = true
+
+# Cache size in megabytes
+cache_size_mb = 512
+
+[wal]
+# Enable Write-Ahead Logging for durability
+enabled = true
+
+# WAL directory (relative to data_dir or absolute path)
+wal_dir = "wal"
+
+# Segment size in megabytes
+segment_size_mb = 64
+
+# Sync on every write (true = durable, false = faster)
+sync_on_write = true
+
+# Auto-checkpoint after N entries
+checkpoint_threshold = 1000
+
+[index]
+# Index directory (relative to data_dir or absolute path)
+index_dir = "indices"
+
+# Automatically create indices for frequently queried properties
+auto_index = false
+
+# Default index type: "hash" or "btree"
+default_index_type = "hash"
+
+[algorithm]
+# PageRank algorithm settings
+pagerank_damping = 0.85
+pagerank_max_iterations = 100
+pagerank_tolerance = 0.000001
+
+# Node2Vec algorithm settings
+node2vec_walk_length = 80
+node2vec_walks_per_node = 10
+
+# Louvain community detection settings
+louvain_max_iterations = 100
+
+[logging]
+# Log level: "error", "warn", "info", "debug", "trace"
+level = "info"
+
+# Write logs to file
+log_to_file = false
+
+# Log file path (if log_to_file is true)
+# log_file = "./deepgraph.log"
+
+# Write logs to console/stderr
+log_to_console = true
+
