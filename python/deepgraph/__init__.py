@@ -47,6 +47,15 @@ from .deepgraph import (
     # MVCC
     PySnapshot,
     PyDeadlockDetector,
+    # Graph Algorithms
+    py_bfs,
+    py_dfs,
+    py_dijkstra,
+    py_connected_components,
+    py_pagerank,
+    py_triangle_count,
+    py_louvain,
+    py_node2vec,
     # Metadata
     __version__,
     __author__,
@@ -78,6 +87,23 @@ __all__ = [
     "PyDeadlockDetector",
     "Snapshot",
     "DeadlockDetector",
+    # Algorithms
+    "py_bfs",
+    "py_dfs",
+    "py_dijkstra",
+    "py_connected_components",
+    "py_pagerank",
+    "py_triangle_count",
+    "py_louvain",
+    "py_node2vec",
+    "bfs",
+    "dfs",
+    "dijkstra",
+    "connected_components",
+    "pagerank",
+    "triangle_count",
+    "louvain",
+    "node2vec",
     # Metadata
     "__version__",
     "__author__",
@@ -92,6 +118,16 @@ WALRecovery = PyWALRecovery
 CypherParser = PyCypherParser
 QueryPlanner = PyQueryPlanner
 QueryExecutor = PyQueryExecutor
+
+# Algorithm aliases
+bfs = py_bfs
+dfs = py_dfs
+dijkstra = py_dijkstra
+connected_components = py_connected_components
+pagerank = py_pagerank
+triangle_count = py_triangle_count
+louvain = py_louvain
+node2vec = py_node2vec
 Snapshot = PySnapshot
 DeadlockDetector = PyDeadlockDetector
 

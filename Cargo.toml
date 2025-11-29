@@ -52,6 +52,9 @@ pest_derive = "2.7"
 # Time utilities
 chrono = "0.4"
 
+# Random number generation (for algorithms)
+rand = "0.8"
+
 # Python bindings
 pyo3 = { version = "0.21", features = ["extension-module", "abi3-py38"], optional = true }
 

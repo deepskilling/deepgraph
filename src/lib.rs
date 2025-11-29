@@ -25,6 +25,9 @@ pub mod query;
 pub mod wal;
 pub mod mvcc;
 
+// Phase 3 modules
+pub mod algorithms;
+
 // Python bindings (optional)
 #[cfg(feature = "python")]
 pub mod python;

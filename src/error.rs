@@ -29,6 +29,9 @@ pub enum DeepGraphError {
     #[error("Parser error: {0}")]
     ParserError(String),
 
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
+
     #[error("Invalid property type: expected {expected}, got {actual}")]
     InvalidPropertyType { expected: String, actual: String },
 

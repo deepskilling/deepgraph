@@ -113,7 +113,18 @@ DeepGraph combines the best of modern database technologies:
 
 **Status**: 97 tests passing, 5.8k lines of code, Python support, production-ready
 
-### Phase 3: Advanced Features (Future)
+### Phase 3: Core Algorithm Checklist (MVP)
+- [x] BFS (Breadth-First Search)
+- [x] DFS (Depth-First Search)
+- [x] Dijkstra Shortest Path
+- [x] Connected Components
+- [x] PageRank
+- [x] Triangle Counting
+- [x] Louvain Community Detection
+- [x] Node2Vec (Biased Random Walk Sampler)
+
+
+### Phase 4: Advanced Features (Future)
 - [ ] Enhanced CLI with REPL
 - [ ] Distributed graph storage
 - [ ] Replication and sharding

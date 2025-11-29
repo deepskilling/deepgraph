@@ -16,6 +16,9 @@ use crate::index::{IndexManager, IndexConfig, IndexType};
 use crate::wal::{WAL, WALConfig, WALRecovery};
 use crate::query::{CypherParser, QueryPlanner};
 use crate::mvcc::deadlock::{DeadlockDetector, ResourceId};
+use crate::algorithms::{
+    bfs, dfs, dijkstra, connected_components, pagerank, triangle_count, louvain, node2vec, Node2VecConfig
+};
 
 /// Convert Rust PropertyValue to Python object
 fn property_value_to_py(py: Python, value: &PropertyValue) -> PyResult<PyObject> {
@@ -925,6 +928,245 @@ impl PyDeadlockDetector {
     }
 }
 
+// ============================================================================
+// Algorithm Python Bindings
+// ============================================================================
+
+/// Python wrapper for BFS (Breadth-First Search) algorithm
+#[pyfunction]
+fn py_bfs(py: Python, storage: &PyGraphStorage, start_node: String, max_depth: Option<usize>) -> PyResult<PyObject> {
+    let node_id = NodeId::from_uuid(Uuid::parse_str(&start_node)
+        .map_err(|e| PyValueError::new_err(format!("Invalid node ID: {}", e)))?);
+    
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = bfs(&storage_lock, node_id, max_depth)
+        .map_err(|e| PyRuntimeError::new_err(format!("BFS failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    dict.set_item("visited", result.visited.iter().map(|id| id.to_string()).collect::<Vec<_>>())?;
+    
+    let distances = pyo3::types::PyDict::new_bound(py);
+    for (node, dist) in result.distances {
+        distances.set_item(node.to_string(), dist)?;
+    }
+    dict.set_item("distances", distances)?;
+    
+    let parents = pyo3::types::PyDict::new_bound(py);
+    for (node, parent) in result.parents {
+        let parent_str = parent.map(|p| p.to_string());
+        parents.set_item(node.to_string(), parent_str)?;
+    }
+    dict.set_item("parents", parents)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for DFS (Depth-First Search) algorithm
+#[pyfunction]
+fn py_dfs(py: Python, storage: &PyGraphStorage, start_node: String) -> PyResult<PyObject> {
+    let node_id = NodeId::from_uuid(Uuid::parse_str(&start_node)
+        .map_err(|e| PyValueError::new_err(format!("Invalid node ID: {}", e)))?);
+    
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = dfs(&storage_lock, node_id)
+        .map_err(|e| PyRuntimeError::new_err(format!("DFS failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    dict.set_item("visited", result.visited.iter().map(|id| id.to_string()).collect::<Vec<_>>())?;
+    
+    let discovery = pyo3::types::PyDict::new_bound(py);
+    for (node, time) in result.discovery_time {
+        discovery.set_item(node.to_string(), time)?;
+    }
+    dict.set_item("discovery_time", discovery)?;
+    
+    let finish = pyo3::types::PyDict::new_bound(py);
+    for (node, time) in result.finish_time {
+        finish.set_item(node.to_string(), time)?;
+    }
+    dict.set_item("finish_time", finish)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for Dijkstra shortest path algorithm
+#[pyfunction]
+fn py_dijkstra(py: Python, storage: &PyGraphStorage, source: String, weight_property: Option<String>) -> PyResult<PyObject> {
+    let source_id = NodeId::from_uuid(Uuid::parse_str(&source)
+        .map_err(|e| PyValueError::new_err(format!("Invalid node ID: {}", e)))?);
+    
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let weight_prop_ref = weight_property.as_ref().map(|s| s.as_str());
+    let result = dijkstra(&storage_lock, source_id, weight_prop_ref)
+        .map_err(|e| PyRuntimeError::new_err(format!("Dijkstra failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    dict.set_item("source", source)?;
+    
+    let distances = pyo3::types::PyDict::new_bound(py);
+    for (node, dist) in result.distances {
+        distances.set_item(node.to_string(), dist)?;
+    }
+    dict.set_item("distances", distances)?;
+    
+    let previous = pyo3::types::PyDict::new_bound(py);
+    for (node, prev) in result.previous {
+        let prev_str = prev.map(|p| p.to_string());
+        previous.set_item(node.to_string(), prev_str)?;
+    }
+    dict.set_item("previous", previous)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for Connected Components algorithm
+#[pyfunction]
+fn py_connected_components(py: Python, storage: &PyGraphStorage) -> PyResult<PyObject> {
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = connected_components(&storage_lock)
+        .map_err(|e| PyRuntimeError::new_err(format!("Connected components failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    dict.set_item("num_components", result.num_components)?;
+    
+    let component_map = pyo3::types::PyDict::new_bound(py);
+    for (node, comp) in result.component_map {
+        component_map.set_item(node.to_string(), comp)?;
+    }
+    dict.set_item("component_map", component_map)?;
+    
+    let component_sizes = pyo3::types::PyDict::new_bound(py);
+    for (comp, size) in result.component_sizes {
+        component_sizes.set_item(comp, size)?;
+    }
+    dict.set_item("component_sizes", component_sizes)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for PageRank algorithm
+#[pyfunction]
+fn py_pagerank(py: Python, storage: &PyGraphStorage, damping_factor: f64, max_iterations: usize, tolerance: f64) -> PyResult<PyObject> {
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = pagerank(&storage_lock, damping_factor, max_iterations, tolerance)
+        .map_err(|e| PyRuntimeError::new_err(format!("PageRank failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    
+    let scores = pyo3::types::PyDict::new_bound(py);
+    for (node, score) in result.scores {
+        scores.set_item(node.to_string(), score)?;
+    }
+    dict.set_item("scores", scores)?;
+    dict.set_item("iterations", result.iterations)?;
+    dict.set_item("converged", result.converged)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for Triangle Counting algorithm
+#[pyfunction]
+fn py_triangle_count(py: Python, storage: &PyGraphStorage) -> PyResult<PyObject> {
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = triangle_count(&storage_lock)
+        .map_err(|e| PyRuntimeError::new_err(format!("Triangle counting failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    dict.set_item("total_triangles", result.total_triangles)?;
+    
+    let node_triangles = pyo3::types::PyDict::new_bound(py);
+    for (node, count) in result.node_triangles {
+        node_triangles.set_item(node.to_string(), count)?;
+    }
+    dict.set_item("node_triangles", node_triangles)?;
+    
+    let clustering = pyo3::types::PyDict::new_bound(py);
+    for (node, coeff) in result.clustering_coefficients {
+        clustering.set_item(node.to_string(), coeff)?;
+    }
+    dict.set_item("clustering_coefficients", clustering)?;
+    dict.set_item("global_clustering_coefficient", result.global_clustering_coefficient)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for Louvain community detection algorithm
+#[pyfunction]
+fn py_louvain(py: Python, storage: &PyGraphStorage, max_iterations: usize, min_improvement: f64) -> PyResult<PyObject> {
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let result = louvain(&storage_lock, max_iterations, min_improvement)
+        .map_err(|e| PyRuntimeError::new_err(format!("Louvain failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    
+    let communities = pyo3::types::PyDict::new_bound(py);
+    for (node, comm) in result.communities {
+        communities.set_item(node.to_string(), comm)?;
+    }
+    dict.set_item("communities", communities)?;
+    dict.set_item("modularity", result.modularity)?;
+    dict.set_item("num_communities", result.num_communities)?;
+    dict.set_item("iterations", result.iterations)?;
+    
+    Ok(dict.to_object(py))
+}
+
+/// Python wrapper for Node2Vec algorithm
+#[pyfunction]
+fn py_node2vec(
+    py: Python,
+    storage: &PyGraphStorage,
+    walk_length: usize,
+    walks_per_node: usize,
+    return_param: f64,
+    inout_param: f64,
+    seed: Option<u64>,
+) -> PyResult<PyObject> {
+    let storage_lock = storage.storage.read()
+        .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+    
+    let config = Node2VecConfig {
+        walk_length,
+        walks_per_node,
+        return_param,
+        inout_param,
+        seed,
+    };
+    
+    let result = node2vec(&storage_lock, config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Node2Vec failed: {}", e)))?;
+    
+    let dict = pyo3::types::PyDict::new_bound(py);
+    
+    let num_walks = result.num_walks();
+    let total_steps = result.total_steps();
+    
+    let walks = pyo3::types::PyList::empty_bound(py);
+    for walk in &result.walks {
+        let py_walk = pyo3::types::PyList::new_bound(py, walk.iter().map(|id| id.to_string()));
+        walks.append(py_walk)?;
+    }
+    dict.set_item("walks", walks)?;
+    dict.set_item("num_walks", num_walks)?;
+    dict.set_item("total_steps", total_steps)?;
+    
+    Ok(dict.to_object(py))
+}
+
 /// DeepGraph Python module
 #[pymodule]
 fn deepgraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -947,6 +1189,16 @@ fn deepgraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // MVCC
     m.add_class::<PySnapshot>()?;
     m.add_class::<PyDeadlockDetector>()?;
+    
+    // Graph Algorithms
+    m.add_function(wrap_pyfunction!(py_bfs, m)?)?;
+    m.add_function(wrap_pyfunction!(py_dfs, m)?)?;
+    m.add_function(wrap_pyfunction!(py_dijkstra, m)?)?;
+    m.add_function(wrap_pyfunction!(py_connected_components, m)?)?;
+    m.add_function(wrap_pyfunction!(py_pagerank, m)?)?;
+    m.add_function(wrap_pyfunction!(py_triangle_count, m)?)?;
+    m.add_function(wrap_pyfunction!(py_louvain, m)?)?;
+    m.add_function(wrap_pyfunction!(py_node2vec, m)?)?;
     
     // Module metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

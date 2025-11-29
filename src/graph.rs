@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Unique identifier for nodes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct NodeId(Uuid);
 
 impl NodeId {
