@@ -43,6 +43,11 @@ parquet = "53.0"
 # Indexing
 sled = "0.34"
 
+# CLI and REPL
+clap = { version = "4.5", features = ["derive"] }
+rustyline = "14.0"
+prettytable-rs = "0.10"
+
 # Concurrency and async
 tokio = { version = "1.40", features = ["full"] }
 parking_lot = "0.12"
