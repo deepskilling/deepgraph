@@ -4,13 +4,16 @@
 //! - In-memory HashMap storage (Phase 1)
 //! - Columnar Arrow storage (Phase 2)
 //! - Persistent Parquet storage (Phase 2)
+//! - Disk-based Sled storage (Phase 4)
 
 pub mod memory;
 pub mod columnar;
+pub mod disk;
 pub mod schema;
 
 pub use memory::MemoryStorage;
 pub use columnar::ColumnarStorage;
+pub use disk::DiskStorage;
 
 use crate::error::Result;
 use crate::graph::{Edge, EdgeId, Node, NodeId};

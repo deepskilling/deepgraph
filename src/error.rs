@@ -11,6 +11,9 @@ pub enum DeepGraphError {
     #[error("Edge not found: {0}")]
     EdgeNotFound(String),
 
+    #[error("Not found: {0}")]
+    NotFound(String),
+
     #[error("Property not found: {0}")]
     PropertyNotFound(String),
 
@@ -39,7 +42,10 @@ pub enum DeepGraphError {
     IoError(#[from] std::io::Error),
 
     #[error("Serialization error: {0}")]
-    SerializationError(#[from] serde_json::Error),
+    SerializationError(String),
+
+    #[error("JSON serialization error: {0}")]
+    JsonError(#[from] serde_json::Error),
 
     #[error("Unknown error: {0}")]
     Unknown(String),

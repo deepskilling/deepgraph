@@ -67,7 +67,7 @@ impl Snapshot {
     pub fn save_metadata(&self) -> Result<()> {
         let metadata_path = self.metadata_file();
         let json = serde_json::to_string_pretty(self)
-            .map_err(|e| DeepGraphError::SerializationError(e))?;
+            .map_err(|e| DeepGraphError::SerializationError(e.to_string()))?;
         
         fs::write(&metadata_path, json)
             .map_err(|e| DeepGraphError::IoError(e))?;
@@ -82,7 +82,7 @@ impl Snapshot {
             .map_err(|e| DeepGraphError::IoError(e))?;
         
         let snapshot: Self = serde_json::from_str(&json)
-            .map_err(|e| DeepGraphError::SerializationError(e))?;
+            .map_err(|e| DeepGraphError::SerializationError(e.to_string()))?;
         
         Ok(snapshot)
     }

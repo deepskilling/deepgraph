@@ -28,6 +28,11 @@ impl NodeId {
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
+
+    /// Get the node ID as bytes
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        self.0.as_bytes()
+    }
 }
 
 impl Default for NodeId {
@@ -60,6 +65,11 @@ impl EdgeId {
     /// Get the underlying UUID
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
+    }
+
+    /// Get the edge ID as bytes
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        self.0.as_bytes()
     }
 }
 

@@ -88,7 +88,7 @@ impl ColumnarStorage {
         
         let mut props_builder = StringBuilder::new();
         let props_json = serde_json::to_string(node.properties())
-            .map_err(|e| DeepGraphError::SerializationError(e))?;
+            .map_err(|e| DeepGraphError::SerializationError(e.to_string()))?;
         props_builder.append_value(&props_json);
         
         let mut created_builder = arrow::array::Int64Builder::new();
@@ -159,7 +159,7 @@ impl ColumnarStorage {
             .ok_or_else(|| DeepGraphError::StorageError("Invalid properties column".to_string()))?;
         let props_json = props_array.value(row_idx);
         let properties: HashMap<String, PropertyValue> = serde_json::from_str(props_json)
-            .map_err(|e| DeepGraphError::SerializationError(e))?;
+            .map_err(|e| DeepGraphError::SerializationError(e.to_string()))?;
         
         // Reconstruct node
         let mut node = Node::with_id(id, labels);
