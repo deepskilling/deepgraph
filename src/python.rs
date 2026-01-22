@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::graph::{Node, Edge, PropertyValue, NodeId, EdgeId};
-use crate::storage::GraphStorage;
+use crate::storage::{GraphStorage, StorageBackend};
 use crate::mvcc::{TransactionManager, txn_manager::TransactionId, current_timestamp};
 use crate::index::{IndexManager, IndexConfig, IndexType};
 use crate::wal::{WAL, WALConfig, WALRecovery};
@@ -1228,11 +1228,225 @@ fn py_node2vec(
     Ok(dict.to_object(py))
 }
 
+// --- DiskStorage Python Bindings ---
+
+use crate::storage::DiskStorage;
+
+/// Python wrapper for DiskStorage
+#[pyclass]
+pub struct PyDiskStorage {
+    storage: Arc<RwLock<DiskStorage>>,
+}
+
+#[pymethods]
+impl PyDiskStorage {
+    /// Create or open a disk-based storage
+    ///
+    /// Args:
+    ///     path: Directory path for the database
+    ///
+    /// Returns:
+    ///     DiskStorage instance
+    ///
+    /// Example:
+    ///     storage = deepgraph.DiskStorage("./data/my_graph.db")
+    #[new]
+    fn new(path: String) -> PyResult<Self> {
+        let storage = DiskStorage::new(&path)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to open disk storage: {}", e)))?;
+        
+        Ok(PyDiskStorage {
+            storage: Arc::new(RwLock::new(storage)),
+        })
+    }
+
+    /// Add a node with labels and properties
+    ///
+    /// Args:
+    ///     labels: List of string labels for the node
+    ///     properties: Dictionary of properties (key-value pairs)
+    ///
+    /// Returns:
+    ///     Node ID as a string
+    fn add_node(&self, labels: Vec<String>, properties: HashMap<String, PyObject>) -> PyResult<String> {
+        Python::with_gil(|py| {
+            let mut node = Node::new(labels);
+            
+            for (key, value) in properties {
+                let prop_value = py_to_property_value(value.bind(py))?;
+                node.set_property(key, prop_value);
+            }
+            
+            let storage = self.storage.write()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            let id = storage.add_node(node)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to add node: {}", e)))?;
+            
+            Ok(id.to_string())
+        })
+    }
+
+    /// Get a node by ID
+    ///
+    /// Args:
+    ///     node_id: Node ID as a string
+    ///
+    /// Returns:
+    ///     Dictionary with node data or None if not found
+    fn get_node(&self, node_id: String) -> PyResult<Option<PyObject>> {
+        Python::with_gil(|py| {
+            let uuid = Uuid::parse_str(&node_id)
+                .map_err(|e| PyValueError::new_err(format!("Invalid node_id: {}", e)))?;
+            let nid = NodeId::from_uuid(uuid);
+
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            match storage.get_node(nid) {
+                Ok(node) => {
+                    let dict = pyo3::types::PyDict::new_bound(py);
+                    dict.set_item("id", node_id)?;
+                    dict.set_item("labels", node.labels().to_vec())?;
+                    
+                    let props = pyo3::types::PyDict::new_bound(py);
+                    for (key, value) in node.properties() {
+                        props.set_item(key, property_value_to_py(py, value)?)?;
+                    }
+                    dict.set_item("properties", props)?;
+                    
+                    Ok(Some(dict.to_object(py)))
+                }
+                Err(_) => Ok(None),
+            }
+        })
+    }
+
+    /// Execute a Cypher query
+    ///
+    /// Args:
+    ///     query: Cypher query string
+    ///
+    /// Returns:
+    ///     Query result dictionary
+    fn execute_cypher(&self, py: Python, query: String) -> PyResult<PyObject> {
+        use crate::query::{CypherParser, QueryPlanner, QueryExecutor, ast::Statement};
+        
+        // Parse query
+        let ast = CypherParser::parse(&query)
+            .map_err(|e| PyRuntimeError::new_err(format!("Parse error: {}", e)))?;
+        let Statement::Query(query_ast) = ast;
+        
+        // Plan query
+        let planner = QueryPlanner::new();
+        let logical_plan = planner.logical_plan(&query_ast)
+            .map_err(|e| PyRuntimeError::new_err(format!("Planning error: {}", e)))?;
+        let physical_plan = planner.physical_plan(&logical_plan)
+            .map_err(|e| PyRuntimeError::new_err(format!("Physical planning error: {}", e)))?;
+        
+        // Execute query
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        // Create Arc wrapper for StorageBackend trait
+        use crate::storage::StorageBackend;
+        let storage_ref: &dyn StorageBackend = &*storage_guard;
+        
+        // Need to clone the data for Arc since we can't share RwLockReadGuard
+        let all_nodes = storage_ref.get_all_nodes();
+        
+        drop(storage_guard); // Release lock
+        
+        // Create temporary in-memory storage with same data
+        use crate::storage::MemoryStorage;
+        let temp_storage = Arc::new(MemoryStorage::new());
+        for node in all_nodes {
+            temp_storage.add_node(node).ok();
+        }
+        
+        let executor = QueryExecutor::new(temp_storage);
+        let result = executor.execute(&physical_plan)
+            .map_err(|e| PyRuntimeError::new_err(format!("Execution error: {}", e)))?;
+        
+        // Convert result to Python
+        let result_dict = pyo3::types::PyDict::new_bound(py);
+        result_dict.set_item("columns", result.columns)?;
+        result_dict.set_item("row_count", result.row_count)?;
+        result_dict.set_item("execution_time_ms", result.execution_time_ms)?;
+        
+        let rows = pyo3::types::PyList::empty_bound(py);
+        for row in result.rows {
+            let row_dict = pyo3::types::PyDict::new_bound(py);
+            for (key, value) in row {
+                row_dict.set_item(key, property_value_to_py(py, &value)?)?;
+            }
+            rows.append(row_dict)?;
+        }
+        result_dict.set_item("rows", rows)?;
+        
+        Ok(result_dict.to_object(py))
+    }
+
+    /// Get all nodes with a specific label
+    ///
+    /// Args:
+    ///     label: Label to search for
+    ///
+    /// Returns:
+    ///     List of node IDs as strings
+    fn find_nodes_by_label(&self, label: String) -> PyResult<Vec<String>> {
+        let storage = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let nodes = storage.get_nodes_by_label(&label);
+        Ok(nodes.iter().map(|node| node.id().to_string()).collect())
+    }
+
+    /// Count total nodes
+    fn node_count(&self) -> PyResult<usize> {
+        let storage = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        Ok(storage.node_count())
+    }
+
+    /// Count total edges
+    fn edge_count(&self) -> PyResult<usize> {
+        let storage = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        Ok(storage.edge_count())
+    }
+
+    /// Flush pending writes to disk
+    fn flush(&self) -> PyResult<()> {
+        let storage = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        storage.flush()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to flush: {}", e)))?;
+        Ok(())
+    }
+
+    /// Get database statistics
+    fn stats(&self) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            let storage = self.storage.read()
+                .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+            
+            let stats = storage.stats();
+            let dict = pyo3::types::PyDict::new_bound(py);
+            dict.set_item("node_count", stats.node_count)?;
+            dict.set_item("edge_count", stats.edge_count)?;
+            dict.set_item("size_on_disk_bytes", stats.size_on_disk_bytes)?;
+            
+            Ok(dict.to_object(py))
+        })
+    }
+}
+
 /// DeepGraph Python module
 #[pymodule]
 fn deepgraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core classes
     m.add_class::<PyGraphStorage>()?;
+    m.add_class::<PyDiskStorage>()?;
     m.add_class::<PyTransactionManager>()?;
     
     // Index management

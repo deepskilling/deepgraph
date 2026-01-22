@@ -39,6 +39,7 @@ For more information, visit: https://github.com/deepskilling/deepgraph
 from .deepgraph import (
     # Core storage
     PyGraphStorage,
+    PyDiskStorage,
     PyTransactionManager,
     # Indexing
     PyIndexManager,
@@ -69,8 +70,10 @@ from .deepgraph import (
 __all__ = [
     # Core
     "PyGraphStorage",
+    "PyDiskStorage",
     "PyTransactionManager",
     "GraphStorage",
+    "DiskStorage",
     "TransactionManager",
     # Indexing
     "PyIndexManager",
@@ -116,6 +119,7 @@ __all__ = [
 
 # Convenience aliases
 GraphStorage = PyGraphStorage
+DiskStorage = PyDiskStorage
 TransactionManager = PyTransactionManager
 IndexManager = PyIndexManager
 WAL = PyWAL
