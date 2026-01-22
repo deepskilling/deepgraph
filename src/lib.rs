@@ -18,6 +18,7 @@ pub mod parser;
 pub mod transaction;
 pub mod error;
 pub mod config;
+pub mod import;
 
 // Phase 2 modules
 pub mod persistence;
