@@ -124,15 +124,54 @@ DeepGraph combines the best of modern database technologies:
 - [x] Node2Vec (Biased Random Walk Sampler)
 
 
-### Phase 4: Advanced Features (Future)
-- [ ] Enhanced CLI with REPL
-- [ ] Distributed graph storage
-- [ ] Replication and sharding
-- [ ] Graph algorithms (PageRank, shortest path, community detection)
+### Phase 4: Critical Features 🔴 (Next Priority)
+- [ ] **Implement Cypher Execution** - Connect parser → planner → executor
+  - Parser exists ✅ (Pest grammar with full Cypher syntax)
+  - Planner exists ✅ (Cost-based query optimization)
+  - Executor exists ✅ (Physical plan execution framework)
+  - **Gap**: Need to wire them together to actually execute parsed queries
+  - Currently: Direct API calls work, but `MATCH`, `WHERE`, `RETURN` don't execute
+- [ ] **Disk-Based Storage** - Make disk primary storage (not just in-memory)
+  - Currently: In-memory (DashMap) with Parquet export
+  - Need: Disk-first architecture for scalability
+  - Target: Support graphs larger than RAM
+- [ ] **CSV/JSON Import** - Data loading capabilities
+  - Currently: Only Parquet export exists
+  - Need: Import from CSV, JSON, Parquet
+  - Essential for real-world data ingestion
+- [ ] **REPL/CLI** - Interactive query interface
+  - Need: Command-line interface for running Cypher queries
+  - Features: Query history, auto-completion, result formatting
+
+### Phase 5: Important Features 🟡 (Future)
+- [ ] **More Language Bindings**
+  - [ ] Node.js bindings (via napi-rs)
+  - [ ] Java bindings (via JNI)
+  - [ ] Go bindings (via cgo)
+  - Currently: Only Python (via PyO3) ✅
+- [ ] **Schema Support** - Optional schema enforcement
+  - Currently: Schemaless (flexible but no validation)
+  - Add: Optional schema definition and validation
+  - Benefits: Data quality, performance optimization
+- [ ] **More Algorithms**
+  - [ ] Betweenness Centrality
+  - [ ] Strongly Connected Components (SCC)
+  - [ ] Label Propagation
+  - [ ] All Shortest Paths
+- [ ] **Distributed Mode** - Scalability beyond single machine
+  - [ ] Sharding (partition graph across nodes)
+  - [ ] Replication (high availability)
+  - [ ] Distributed query execution
+
+### Phase 6: Advanced Features 🟢 (Long-term)
 - [ ] REST API server
 - [ ] WebSocket support for real-time queries
-- [ ] Extended Cypher features
-- [ ] Performance profiling and optimization
+- [ ] Full-text search indexing
+- [ ] Spatial queries and indexes
+- [ ] Advanced aggregations (window functions)
+- [ ] Query result caching
+- [ ] Performance profiling tools
+- [ ] GraphQL API support
 
 ## 📦 Installation
 
