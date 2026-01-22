@@ -34,14 +34,42 @@ pub struct DeepGraphConfig {
 /// Storage configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
+    /// Storage type: "memory" or "disk"
+    #[serde(default = "default_storage_type")]
+    pub storage_type: String,
+    
     /// Base data directory
     pub data_dir: String,
+    
+    /// Disk storage path (for disk storage type)
+    #[serde(default = "default_disk_path")]
+    pub disk_path: String,
     
     /// Enable in-memory caching
     pub enable_cache: bool,
     
     /// Cache size in MB
     pub cache_size_mb: usize,
+    
+    /// Flush interval in milliseconds (for disk storage)
+    #[serde(default = "default_flush_interval_ms")]
+    pub flush_interval_ms: u64,
+    
+    /// Auto-compact interval in seconds (0 = disabled)
+    #[serde(default)]
+    pub auto_compact_interval_secs: u64,
+}
+
+fn default_storage_type() -> String {
+    "memory".to_string()
+}
+
+fn default_disk_path() -> String {
+    "./data/deepgraph.db".to_string()
+}
+
+fn default_flush_interval_ms() -> u64 {
+    100 // Flush every 100ms
 }
 
 /// WAL configuration options
@@ -129,9 +157,13 @@ impl Default for DeepGraphConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
+            storage_type: default_storage_type(),
             data_dir: "./data".to_string(),
+            disk_path: default_disk_path(),
             enable_cache: true,
             cache_size_mb: 512,
+            flush_interval_ms: default_flush_interval_ms(),
+            auto_compact_interval_secs: 0, // Disabled by default
         }
     }
 }

@@ -2,14 +2,27 @@
 # This is the main configuration file for DeepGraph database
 
 [storage]
+# Storage type: "memory" (in-memory) or "disk" (persistent)
+storage_type = "memory"
+
 # Base data directory for all persistent files
 data_dir = "./data"
+
+# Disk storage database path (used when storage_type = "disk")
+disk_path = "./data/deepgraph.db"
 
 # Enable in-memory caching
 enable_cache = true
 
 # Cache size in megabytes
 cache_size_mb = 512
+
+# Flush interval in milliseconds (for disk storage, lower = more durable, higher = faster)
+flush_interval_ms = 100
+
+# Auto-compact interval in seconds (0 = disabled)
+# Compaction reclaims disk space from deleted data
+auto_compact_interval_secs = 0
 
 [wal]
 # Enable Write-Ahead Logging for durability
