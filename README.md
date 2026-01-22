@@ -133,10 +133,15 @@ DeepGraph combines the best of modern database technologies:
   - **Python API**: `storage.execute_cypher("MATCH (n:Person) WHERE n.age > 25 RETURN n;")`
   - **Documentation**: See [Cypher Query Guide](doc/CYPHER_GUIDE.md)
   - **Tests**: 11 Rust E2E tests + 21 Python tests (100% passing)
-- [ ] **Disk-Based Storage** - Make disk primary storage (not just in-memory)
-  - Currently: In-memory (DashMap) with Parquet export
-  - Need: Disk-first architecture for scalability
-  - Target: Support graphs larger than RAM
+- [x] **Disk-Based Storage** ✅ COMPLETE - Persistent storage with Sled
+  - **Sled-based**: Embedded database with ACID guarantees + crash recovery
+  - **Persistent**: Data survives restarts (unlike in-memory)
+  - **Scalable**: Supports graphs larger than RAM
+  - **Python API**: `storage = deepgraph.DiskStorage("./data/my_graph.db")`
+  - **Rust API**: `DiskStorage::new("./data/my_graph.db")`
+  - **Documentation**: See [Disk Storage Guide](doc/DISK_STORAGE_GUIDE.md)
+  - **Tests**: 8 Rust tests + 9 Python tests (100% passing)
+  - **Configuration**: See `config.toml` for tuning options
 - [ ] **CSV/JSON Import** - Data loading capabilities
   - Currently: Only Parquet export exists
   - Need: Import from CSV, JSON, Parquet
