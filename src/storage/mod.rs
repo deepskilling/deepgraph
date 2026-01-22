@@ -44,6 +44,9 @@ pub trait StorageBackend: Send + Sync {
     /// Get all nodes with a specific label
     fn get_nodes_by_label(&self, label: &str) -> Vec<Node>;
     
+    /// Get all nodes (for full scan - MATCH (n))
+    fn get_all_nodes(&self) -> Vec<Node>;
+    
     /// Get outgoing edges from a node
     fn get_outgoing_edges(&self, node_id: NodeId) -> Result<Vec<Edge>>;
     
@@ -96,6 +99,10 @@ impl StorageBackend for MemoryStorage {
     
     fn get_nodes_by_label(&self, label: &str) -> Vec<Node> {
         MemoryStorage::get_nodes_by_label(self, label)
+    }
+    
+    fn get_all_nodes(&self) -> Vec<Node> {
+        MemoryStorage::get_all_nodes(self)
     }
     
     fn get_outgoing_edges(&self, node_id: NodeId) -> Result<Vec<Edge>> {

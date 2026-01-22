@@ -81,19 +81,30 @@ impl<S: StorageBackend> QueryExecutor<S> {
         let nodes = if let Some(label) = label {
             self.storage.get_nodes_by_label(label)
         } else {
-            // Full scan - not implemented yet in trait
-            vec![]
+            // Full scan - now implemented!
+            self.storage.get_all_nodes()
         };
         
-        // Convert nodes to result rows
-        let columns = vec!["node".to_string()];
+        // Convert nodes to result rows with properties
+        let mut columns = vec!["_node_id".to_string()];
         let rows: Vec<HashMap<String, PropertyValue>> = nodes
             .into_iter()
             .map(|node| {
                 let mut row = HashMap::new();
-                // Serialize node ID as string for now
-                row.insert("node".to_string(), 
+                
+                // Add node ID
+                row.insert("_node_id".to_string(), 
                     PropertyValue::String(node.id().to_string()));
+                
+                // Add all node properties to row for property access
+                for (key, value) in node.properties().iter() {
+                    row.insert(key.clone(), value.clone());
+                    // Track columns dynamically
+                    if !columns.contains(key) {
+                        columns.push(key.clone());
+                    }
+                }
+                
                 row
             })
             .collect();
@@ -105,14 +116,273 @@ impl<S: StorageBackend> QueryExecutor<S> {
     fn execute_filter(
         &self,
         source: &PhysicalPlan,
-        _predicate: &crate::query::ast::Expression,
+        predicate: &crate::query::ast::Expression,
     ) -> Result<QueryResult> {
         // Get source results
         let source_result = self.execute(source)?;
         
-        // TODO: Evaluate predicate on each row
-        // For now, just return source results
-        Ok(source_result)
+        // Evaluate predicate on each row
+        let filtered_rows: Vec<HashMap<String, PropertyValue>> = source_result
+            .rows
+            .into_iter()
+            .filter(|row| self.evaluate_predicate(predicate, row).unwrap_or(false))
+            .collect();
+        
+        Ok(QueryResult::with_data(source_result.columns, filtered_rows))
+    }
+    
+    /// Evaluate a predicate expression on a row
+    fn evaluate_predicate(
+        &self,
+        expr: &crate::query::ast::Expression,
+        row: &HashMap<String, PropertyValue>,
+    ) -> Result<bool> {
+        use crate::query::ast::Expression;
+        
+        match expr {
+            // Logical operators
+            Expression::And(left, right) => {
+                let left_val = self.evaluate_predicate(left, row)?;
+                let right_val = self.evaluate_predicate(right, row)?;
+                Ok(left_val && right_val)
+            }
+            Expression::Or(left, right) => {
+                let left_val = self.evaluate_predicate(left, row)?;
+                let right_val = self.evaluate_predicate(right, row)?;
+                Ok(left_val || right_val)
+            }
+            Expression::Not(inner) => {
+                let val = self.evaluate_predicate(inner, row)?;
+                Ok(!val)
+            }
+            
+            // Comparison operators
+            Expression::Eq(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(left_val == right_val)
+            }
+            Expression::Ne(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(left_val != right_val)
+            }
+            Expression::Lt(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(self.compare_values(&left_val, &right_val)? < 0)
+            }
+            Expression::Le(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(self.compare_values(&left_val, &right_val)? <= 0)
+            }
+            Expression::Gt(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(self.compare_values(&left_val, &right_val)? > 0)
+            }
+            Expression::Ge(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                Ok(self.compare_values(&left_val, &right_val)? >= 0)
+            }
+            
+            _ => {
+                // For other expressions, try to evaluate as value and check if truthy
+                let val = self.evaluate_value(expr, row)?;
+                Ok(match val {
+                    PropertyValue::Boolean(b) => b,
+                    PropertyValue::Null => false,
+                    _ => true,
+                })
+            }
+        }
+    }
+    
+    /// Evaluate an expression to a value
+    fn evaluate_value(
+        &self,
+        expr: &crate::query::ast::Expression,
+        row: &HashMap<String, PropertyValue>,
+    ) -> Result<PropertyValue> {
+        use crate::query::ast::Expression;
+        
+        match expr {
+            Expression::Literal(val) => Ok(val.clone()),
+            
+            Expression::Variable(name) => {
+                // Look up variable in row
+                row.get(name)
+                    .cloned()
+                    .ok_or_else(|| crate::error::DeepGraphError::InvalidOperation(
+                        format!("Variable not found: {}", name)
+                    ))
+            }
+            
+            Expression::Property(base, prop) => {
+                // For property access like n.age, evaluate base then get property
+                if let Expression::Variable(var_name) = base.as_ref() {
+                    // Look up property directly in row (we flattened it in scan)
+                    row.get(prop)
+                        .cloned()
+                        .ok_or_else(|| crate::error::DeepGraphError::InvalidOperation(
+                            format!("Property not found: {}.{}", var_name, prop)
+                        ))
+                } else {
+                    Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Complex property access not yet supported".to_string()
+                    ))
+                }
+            }
+            
+            // Arithmetic operators
+            Expression::Add(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                self.add_values(&left_val, &right_val)
+            }
+            Expression::Sub(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                self.sub_values(&left_val, &right_val)
+            }
+            Expression::Mul(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                self.mul_values(&left_val, &right_val)
+            }
+            Expression::Div(left, right) => {
+                let left_val = self.evaluate_value(left, row)?;
+                let right_val = self.evaluate_value(right, row)?;
+                self.div_values(&left_val, &right_val)
+            }
+            
+            Expression::Neg(inner) => {
+                let val = self.evaluate_value(inner, row)?;
+                match val {
+                    PropertyValue::Integer(i) => Ok(PropertyValue::Integer(-i)),
+                    PropertyValue::Float(f) => Ok(PropertyValue::Float(-f)),
+                    _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Cannot negate non-numeric value".to_string()
+                    )),
+                }
+            }
+            
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                format!("Expression evaluation not yet implemented: {:?}", expr)
+            )),
+        }
+    }
+    
+    /// Compare two property values
+    fn compare_values(&self, left: &PropertyValue, right: &PropertyValue) -> Result<i32> {
+        match (left, right) {
+            (PropertyValue::Integer(l), PropertyValue::Integer(r)) => Ok(l.cmp(r) as i32),
+            (PropertyValue::Float(l), PropertyValue::Float(r)) => {
+                if l < r { Ok(-1) }
+                else if l > r { Ok(1) }
+                else { Ok(0) }
+            }
+            (PropertyValue::Integer(l), PropertyValue::Float(r)) => {
+                let l = *l as f64;
+                if l < *r { Ok(-1) }
+                else if l > *r { Ok(1) }
+                else { Ok(0) }
+            }
+            (PropertyValue::Float(l), PropertyValue::Integer(r)) => {
+                let r = *r as f64;
+                if l < &r { Ok(-1) }
+                else if l > &r { Ok(1) }
+                else { Ok(0) }
+            }
+            (PropertyValue::String(l), PropertyValue::String(r)) => Ok(l.cmp(r) as i32),
+            (PropertyValue::Boolean(l), PropertyValue::Boolean(r)) => Ok(l.cmp(r) as i32),
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                "Cannot compare incompatible types".to_string()
+            )),
+        }
+    }
+    
+    /// Add two property values
+    fn add_values(&self, left: &PropertyValue, right: &PropertyValue) -> Result<PropertyValue> {
+        match (left, right) {
+            (PropertyValue::Integer(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Integer(l + r)),
+            (PropertyValue::Float(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(l + r)),
+            (PropertyValue::Integer(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(*l as f64 + r)),
+            (PropertyValue::Float(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Float(l + *r as f64)),
+            (PropertyValue::String(l), PropertyValue::String(r)) => Ok(PropertyValue::String(format!("{}{}", l, r))),
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                "Cannot add incompatible types".to_string()
+            )),
+        }
+    }
+    
+    /// Subtract two property values
+    fn sub_values(&self, left: &PropertyValue, right: &PropertyValue) -> Result<PropertyValue> {
+        match (left, right) {
+            (PropertyValue::Integer(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Integer(l - r)),
+            (PropertyValue::Float(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(l - r)),
+            (PropertyValue::Integer(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(*l as f64 - r)),
+            (PropertyValue::Float(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Float(l - *r as f64)),
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                "Cannot subtract incompatible types".to_string()
+            )),
+        }
+    }
+    
+    /// Multiply two property values
+    fn mul_values(&self, left: &PropertyValue, right: &PropertyValue) -> Result<PropertyValue> {
+        match (left, right) {
+            (PropertyValue::Integer(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Integer(l * r)),
+            (PropertyValue::Float(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(l * r)),
+            (PropertyValue::Integer(l), PropertyValue::Float(r)) => Ok(PropertyValue::Float(*l as f64 * r)),
+            (PropertyValue::Float(l), PropertyValue::Integer(r)) => Ok(PropertyValue::Float(l * *r as f64)),
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                "Cannot multiply incompatible types".to_string()
+            )),
+        }
+    }
+    
+    /// Divide two property values
+    fn div_values(&self, left: &PropertyValue, right: &PropertyValue) -> Result<PropertyValue> {
+        match (left, right) {
+            (PropertyValue::Integer(l), PropertyValue::Integer(r)) => {
+                if *r == 0 {
+                    return Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Division by zero".to_string()
+                    ));
+                }
+                Ok(PropertyValue::Integer(l / r))
+            }
+            (PropertyValue::Float(l), PropertyValue::Float(r)) => {
+                if *r == 0.0 {
+                    return Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Division by zero".to_string()
+                    ));
+                }
+                Ok(PropertyValue::Float(l / r))
+            }
+            (PropertyValue::Integer(l), PropertyValue::Float(r)) => {
+                if *r == 0.0 {
+                    return Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Division by zero".to_string()
+                    ));
+                }
+                Ok(PropertyValue::Float(*l as f64 / r))
+            }
+            (PropertyValue::Float(l), PropertyValue::Integer(r)) => {
+                if *r == 0 {
+                    return Err(crate::error::DeepGraphError::InvalidOperation(
+                        "Division by zero".to_string()
+                    ));
+                }
+                Ok(PropertyValue::Float(l / *r as f64))
+            }
+            _ => Err(crate::error::DeepGraphError::InvalidOperation(
+                "Cannot divide incompatible types".to_string()
+            )),
+        }
     }
     
     /// Execute a projection

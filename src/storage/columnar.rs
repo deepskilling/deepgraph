@@ -287,6 +287,18 @@ impl StorageBackend for ColumnarStorage {
         nodes
     }
     
+    fn get_all_nodes(&self) -> Vec<Node> {
+        // Get all nodes (full scan)
+        let mut nodes = Vec::new();
+        for entry in self.node_index.iter() {
+            let (batch_idx, row_idx) = *entry.value();
+            if let Ok(node) = self.deserialize_node(batch_idx, row_idx) {
+                nodes.push(node);
+            }
+        }
+        nodes
+    }
+    
     fn get_outgoing_edges(&self, node_id: NodeId) -> Result<Vec<Edge>> {
         if !self.node_index.contains_key(&node_id) {
             return Err(DeepGraphError::NodeNotFound(node_id.to_string()));
