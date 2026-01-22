@@ -482,6 +482,67 @@ impl PyGraphStorage {
         })
     }
 
+    /// Execute a Cypher query
+    /// 
+    /// Args:
+    ///     query: Cypher query string (e.g., "MATCH (n:Person) WHERE n.age > 25 RETURN n")
+    /// 
+    /// Returns:
+    ///     Dictionary with:
+    ///         - columns: List of column names
+    ///         - rows: List of row dictionaries
+    ///         - row_count: Number of rows returned
+    ///         - execution_time_ms: Execution time in milliseconds
+    /// 
+    /// Example:
+    ///     result = storage.execute_cypher("MATCH (n:Person) WHERE n.age > 25 RETURN n;")
+    ///     for row in result['rows']:
+    ///         print(row['name'], row['age'])
+    fn execute_cypher(&self, py: Python, query: String) -> PyResult<PyObject> {
+        use crate::query::{CypherParser, QueryPlanner, QueryExecutor, ast::Statement};
+        
+        // Parse the query
+        let ast = CypherParser::parse(&query)
+            .map_err(|e| PyRuntimeError::new_err(format!("Parse error: {}", e)))?;
+        
+        // Extract the query from the statement
+        let Statement::Query(query_ast) = ast;
+        
+        // Create planner and generate execution plan
+        let planner = QueryPlanner::new();
+        let logical_plan = planner.logical_plan(&query_ast)
+            .map_err(|e| PyRuntimeError::new_err(format!("Planning error: {}", e)))?;
+        let physical_plan = planner.physical_plan(&logical_plan)
+            .map_err(|e| PyRuntimeError::new_err(format!("Physical planning error: {}", e)))?;
+        
+        // Execute the query
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let executor = QueryExecutor::new(std::sync::Arc::new(storage_guard.clone()));
+        let result = executor.execute(&physical_plan)
+            .map_err(|e| PyRuntimeError::new_err(format!("Execution error: {}", e)))?;
+        
+        // Convert result to Python dictionary
+        let result_dict = pyo3::types::PyDict::new_bound(py);
+        result_dict.set_item("columns", result.columns)?;
+        result_dict.set_item("row_count", result.row_count)?;
+        result_dict.set_item("execution_time_ms", result.execution_time_ms)?;
+        
+        // Convert rows to Python list of dictionaries
+        let rows = pyo3::types::PyList::empty_bound(py);
+        for row in result.rows {
+            let row_dict = pyo3::types::PyDict::new_bound(py);
+            for (key, value) in row {
+                row_dict.set_item(key, property_value_to_py(py, &value)?)?;
+            }
+            rows.append(row_dict)?;
+        }
+        result_dict.set_item("rows", rows)?;
+        
+        Ok(result_dict.to_object(py))
+    }
+
     /// Get all edges in the graph
     /// 
     /// Returns:

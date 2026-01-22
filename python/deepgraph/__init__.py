@@ -10,16 +10,21 @@ Example:
     >>> # Create a graph storage
     >>> storage = deepgraph.GraphStorage()
     >>> 
-    >>> # Add a node
-    >>> node_id = storage.add_node(
+    >>> # Add nodes
+    >>> alice_id = storage.add_node(
     ...     labels=["Person"],
     ...     properties={"name": "Alice", "age": 30}
     ... )
+    >>> bob_id = storage.add_node(
+    ...     labels=["Person"],
+    ...     properties={"name": "Bob", "age": 25}
+    ... )
     >>> 
-    >>> # Get the node
-    >>> node = storage.get_node(node_id)
-    >>> print(node)
-    >>> 
+    >>> # Execute a Cypher query
+    >>> result = storage.execute_cypher("MATCH (n:Person) WHERE n.age > 25 RETURN n;")
+    >>> for row in result['rows']:
+    ...     print(row['name'], row['age'])
+    ... 
     >>> # Use indices for fast lookups
     >>> idx_mgr = deepgraph.IndexManager()
     >>> idx_mgr.create_hash_index("person_idx", "Person")
