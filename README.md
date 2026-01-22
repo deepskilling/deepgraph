@@ -380,10 +380,23 @@ print(f"Total edges: {storage.edge_count()}")
 
 ## 📚 Documentation
 
-- **[Getting Started Guide](doc/GETTING_STARTED.md)** - Comprehensive tutorial for new users
-- **[API Documentation](doc/API.md)** - Complete API reference and examples
-- **[Architecture Overview](doc/DETAILED_REVIEW.md)** - System design and internals
-- **[Contributing Guidelines](doc/CONTRIBUTING.md)** - How to contribute to the project
+### 📖 Main Documentation Hub
+- **[Documentation Index](doc/README.md)** ⭐ **Start Here** - Complete guide to all documentation
+
+### 🚀 Quick Start Guides
+- **[Python Quick Start](doc/PYTHON_QUICKSTART.md)** - Comprehensive Python API guide (1,700+ lines)
+- **[Getting Started](doc/GETTING_STARTED.md)** - Basic introduction and concepts
+
+### 🔍 Feature Guides
+- **[Cypher Query Guide](doc/CYPHER_GUIDE.md)** - Complete query language reference (800+ lines)
+- **[Disk Storage Guide](doc/DISK_STORAGE_GUIDE.md)** - Persistent storage configuration
+- **[Data Import Guide](doc/IMPORT_GUIDE.md)** - CSV/JSON import (700+ lines)
+- **[CLI/REPL Guide](doc/CLI_GUIDE.md)** - Interactive command-line interface (700+ lines)
+
+### 📋 Reference
+- **[Kuzu Comparison](doc/KUZU_COMPARISON.md)** - Feature comparison with Kuzu
+- **[Phase 4 Complete](doc/PHASE4_COMPLETE.md)** - Milestone summary and architecture
+- **[Contributing Guidelines](doc/CONTRIBUTING.md)** - How to contribute
 
 ## 📊 Project Statistics
 
