@@ -125,12 +125,14 @@ DeepGraph combines the best of modern database technologies:
 
 
 ### Phase 4: Critical Features 🔴 (Next Priority)
-- [ ] **Implement Cypher Execution** - Connect parser → planner → executor
-  - Parser exists ✅ (Pest grammar with full Cypher syntax)
-  - Planner exists ✅ (Cost-based query optimization)
-  - Executor exists ✅ (Physical plan execution framework)
-  - **Gap**: Need to wire them together to actually execute parsed queries
-  - Currently: Direct API calls work, but `MATCH`, `WHERE`, `RETURN` don't execute
+- [x] **Implement Cypher Execution** ✅ COMPLETE - Connect parser → planner → executor
+  - Parser ✅ (Pest grammar with full Cypher syntax + AST builder)
+  - Planner ✅ (Cost-based query optimization with label extraction)
+  - Executor ✅ (Physical plan execution with WHERE evaluation)
+  - **Working**: `MATCH`, `WHERE`, `RETURN` queries fully execute!
+  - **Python API**: `storage.execute_cypher("MATCH (n:Person) WHERE n.age > 25 RETURN n;")`
+  - **Documentation**: See [Cypher Query Guide](doc/CYPHER_GUIDE.md)
+  - **Tests**: 11 Rust E2E tests + 21 Python tests (100% passing)
 - [ ] **Disk-Based Storage** - Make disk primary storage (not just in-memory)
   - Currently: In-memory (DashMap) with Parquet export
   - Need: Disk-first architecture for scalability
