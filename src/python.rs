@@ -543,6 +543,146 @@ impl PyGraphStorage {
         Ok(result_dict.to_object(py))
     }
 
+    /// Import nodes from a CSV file
+    ///
+    /// Args:
+    ///     path: Path to CSV file
+    ///
+    /// Returns:
+    ///     Dictionary with import statistics
+    ///
+    /// Example:
+    ///     stats = storage.import_csv_nodes("nodes.csv")
+    ///     print(f"Imported {stats['nodes_imported']} nodes")
+    fn import_csv_nodes(&self, py: Python, path: String) -> PyResult<PyObject> {
+        use crate::import::CsvImporter;
+        
+        let importer = CsvImporter::new();
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let stats = importer.import_nodes(&*storage_guard, &path)
+            .map_err(|e| PyRuntimeError::new_err(format!("Import error: {}", e)))?;
+        
+        // Convert stats to Python dict
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("nodes_imported", stats.nodes_imported)?;
+        dict.set_item("edges_imported", stats.edges_imported)?;
+        dict.set_item("duration_ms", stats.duration_ms)?;
+        dict.set_item("errors", stats.errors)?;
+        
+        // Convert node_id_map to Python dict
+        let id_map = pyo3::types::PyDict::new_bound(py);
+        for (k, v) in stats.node_id_map {
+            id_map.set_item(k, v)?;
+        }
+        dict.set_item("node_id_map", id_map)?;
+        
+        Ok(dict.to_object(py))
+    }
+
+    /// Import edges from a CSV file
+    ///
+    /// Args:
+    ///     path: Path to CSV file
+    ///     node_id_map: Dictionary mapping external IDs to internal IDs
+    ///
+    /// Returns:
+    ///     Dictionary with import statistics
+    ///
+    /// Example:
+    ///     node_stats = storage.import_csv_nodes("nodes.csv")
+    ///     edge_stats = storage.import_csv_edges("edges.csv", node_stats['node_id_map'])
+    fn import_csv_edges(&self, py: Python, path: String, node_id_map: HashMap<String, String>) -> PyResult<PyObject> {
+        use crate::import::CsvImporter;
+        
+        let importer = CsvImporter::new();
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let stats = importer.import_edges(&*storage_guard, &path, &node_id_map)
+            .map_err(|e| PyRuntimeError::new_err(format!("Import error: {}", e)))?;
+        
+        // Convert stats to Python dict
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("nodes_imported", stats.nodes_imported)?;
+        dict.set_item("edges_imported", stats.edges_imported)?;
+        dict.set_item("duration_ms", stats.duration_ms)?;
+        dict.set_item("errors", stats.errors)?;
+        
+        Ok(dict.to_object(py))
+    }
+
+    /// Import nodes from a JSON file
+    ///
+    /// Args:
+    ///     path: Path to JSON file
+    ///
+    /// Returns:
+    ///     Dictionary with import statistics
+    ///
+    /// Example:
+    ///     stats = storage.import_json_nodes("nodes.json")
+    ///     print(f"Imported {stats['nodes_imported']} nodes")
+    fn import_json_nodes(&self, py: Python, path: String) -> PyResult<PyObject> {
+        use crate::import::JsonImporter;
+        
+        let importer = JsonImporter::new();
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let stats = importer.import_nodes(&*storage_guard, &path)
+            .map_err(|e| PyRuntimeError::new_err(format!("Import error: {}", e)))?;
+        
+        // Convert stats to Python dict
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("nodes_imported", stats.nodes_imported)?;
+        dict.set_item("edges_imported", stats.edges_imported)?;
+        dict.set_item("duration_ms", stats.duration_ms)?;
+        dict.set_item("errors", stats.errors)?;
+        
+        // Convert node_id_map to Python dict
+        let id_map = pyo3::types::PyDict::new_bound(py);
+        for (k, v) in stats.node_id_map {
+            id_map.set_item(k, v)?;
+        }
+        dict.set_item("node_id_map", id_map)?;
+        
+        Ok(dict.to_object(py))
+    }
+
+    /// Import edges from a JSON file
+    ///
+    /// Args:
+    ///     path: Path to JSON file
+    ///     node_id_map: Dictionary mapping external IDs to internal IDs
+    ///
+    /// Returns:
+    ///     Dictionary with import statistics
+    ///
+    /// Example:
+    ///     node_stats = storage.import_json_nodes("nodes.json")
+    ///     edge_stats = storage.import_json_edges("edges.json", node_stats['node_id_map'])
+    fn import_json_edges(&self, py: Python, path: String, node_id_map: HashMap<String, String>) -> PyResult<PyObject> {
+        use crate::import::JsonImporter;
+        
+        let importer = JsonImporter::new();
+        let storage_guard = self.storage.read()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {}", e)))?;
+        
+        let stats = importer.import_edges(&*storage_guard, &path, &node_id_map)
+            .map_err(|e| PyRuntimeError::new_err(format!("Import error: {}", e)))?;
+        
+        // Convert stats to Python dict
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("nodes_imported", stats.nodes_imported)?;
+        dict.set_item("edges_imported", stats.edges_imported)?;
+        dict.set_item("duration_ms", stats.duration_ms)?;
+        dict.set_item("errors", stats.errors)?;
+        
+        Ok(dict.to_object(py))
+    }
+
     /// Get all edges in the graph
     /// 
     /// Returns:
