@@ -393,6 +393,19 @@ impl<S: StorageBackend> QueryExecutor<S> {
     ) -> Result<QueryResult> {
         let source_result = self.execute(source)?;
         
+        // If no specific columns or columns is empty, return all
+        if columns.is_empty() {
+            return Ok(source_result);
+        }
+        
+        // Check if we're projecting a node variable (like RETURN n)
+        // In this case, return all properties
+        if columns.len() == 1 && source_result.rows.first().map_or(false, |row| !row.contains_key(&columns[0])) {
+            // The column name doesn't exist in the row - it's likely a node variable
+            // Return all properties
+            return Ok(source_result);
+        }
+        
         // Project only requested columns
         let rows: Vec<HashMap<String, PropertyValue>> = source_result
             .rows

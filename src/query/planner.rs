@@ -174,11 +174,24 @@ impl QueryPlanner {
             });
         }
         
-        // For now, simple node scan
-        // TODO: Analyze patterns and use indices
+        // Extract labels from first node pattern
+        let first_pattern = &match_clause.patterns[0];
+        let mut labels = vec![];
+        let mut variable = "n".to_string();
+        
+        for element in &first_pattern.elements {
+            if let PatternElement::Node(node_pattern) = element {
+                labels = node_pattern.labels.clone();
+                if let Some(var) = &node_pattern.variable {
+                    variable = var.clone();
+                }
+                break; // Use first node for now
+            }
+        }
+        
         Ok(LogicalPlan::NodeScan {
-            variable: "n".to_string(),
-            labels: vec![],
+            variable,
+            labels,
         })
     }
     

@@ -84,7 +84,7 @@ comparison_expression = {
 }
 
 comparison_operator = {
-    "=" | "!=" | "<>" | "<" | "<=" | ">" | ">="
+    "=" | "!=" | "<>" | "<=" | "<" | ">=" | ">"
 }
 
 additive_expression = {
